@@ -1,99 +1,75 @@
-# Clone Anything - App Analysis & Reconstruction Workbench
+# Clone Anything - REA Web Workbench
 
-A CLI-launched local web app that gives you a three-panel browser workbench:
-**search a target on the left**, watch the **AI agent's thoughts in the middle**,
-and inspect / download a **generated original project on the right**.
+A CLI-launched website that puts the **official REA (Reverse Engineer Anything)**
+tools behind a browser UI. REA 6.10.1 is installed from npm (MIT licensed) and
+runs locally; the website calls the real `rea` commands and displays the actual
+Evidence, target source files and report.
 
-It is inspired by [REA (Reverse Engineer Anything)](https://github.com/morluto/rea)
-but contains its own original implementation and no third-party npm packages.
+This is **not** a generator that invents a different app. It records what REA
+finds about the exact target you choose, and keeps the evidence, unknowns and
+limitations visible.
 
-## Legal scope (read this first)
+## Legal scope
 
-This tool analyzes software **you own or are authorized to examine**. It
-generates **original** implementations from observed evidence. It does **not**
-clone proprietary apps or games, copy protected code, or remove real
-subscriptions, paywalls, license checks or DRM. The only "subscription gate"
-in the repository is a clearly marked **mock** gate inside the built-in demo,
-and it is removed from the generated demo output to demonstrate that workflow.
-
-## Requirements
-
-- Node.js 22.23.4+, 24.22.1+, or 26.12.1+ (with npm)
-- Any modern browser
-- Optional: Chrome/Edge started with `--remote-debugging-port=9222` for live
-  browser observation; otherwise the built-in HTTP observer is used
-- Optional: an OpenAI-compatible API endpoint for a stronger reasoning model
+Authorized targets only. The workbench does not clone proprietary apps, copy
+protected code, or remove real subscriptions, paywalls, license checks or DRM.
 
 ## Quick start
 
 ```powershell
-cd "C:\Users\USER\Documents\clone-anything"
+cd "F:\Program Files\clone anything"
 npm start
 ```
 
-The CLI starts a local server on `http://127.0.0.1:3000` and opens your browser.
+Open `http://127.0.0.1:3000`. Pick **Notes Example (real local target)** and
+press **Run REA analysis**.
 
-Because `F:\Program Files\clone anything` is owned by Administrators, an
-elevated helper script is included:
+The source of truth lives in `C:\Users\USER\Documents\clone-anything`. Because
+`F:\Program Files\clone anything` is admin-owned, use the elevated helper after
+changes:
 
 ```powershell
 # Run as administrator
 powershell -ExecutionPolicy Bypass -File .\install-to-folder.ps1
 ```
 
-## CLI commands
+## What the UI shows
 
-| Command | Purpose |
-| --- | --- |
-| `npm start` | Start the browser workbench |
-| `node bin/cli.js start --port 4000 --no-open` | Custom port, no auto-open |
-| `npm run doctor` | Check runtime, AI, browser and workspace |
-| `node bin/cli.js analyze <path-or-url> --question "..."` | Analyze from the terminal |
-| `npm test` | Run smoke tests |
+- **Left:** target search (installed apps, folders, URLs), the installed REA
+  tool catalog (206 tools), and the question for the agent.
+- **Middle:** streamed tool events and the agent's reasoning.
+- **Right:** four tabs — **Report**, **Evidence** (full REA JSON), **Target
+  files** (read-only original source), and **Preview** (iframe for URLs).
+- **Download bundle** exports `report.md`, `rea-evidence.json`, raw tool output
+  and a snapshot of the target files.
 
-## Configuration
+## CLI
 
-Environment variables:
+```powershell
+npm start
+npm run doctor
+node bin/cli.js analyze <path|url> --question "..."
+node bin/cli.js analyze builtin://notes-example
+npm test
+```
 
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `PORT` | `3000` | Local server port |
-| `AI_BASE_URL` | empty | OpenAI-compatible API base URL, e.g. `https://api.openai.com/v1` |
-| `AI_API_KEY` | empty | API key; when empty, the deterministic local brain is used |
-| `AI_MODEL` | `gpt-4o-mini` | Model name for the configured endpoint |
-| `BROWSER_CDP_URL` | `http://127.0.0.1:9222` | Chrome/Edge DevTools endpoint |
-| `CLONE_ANYTHING_WORKSPACE` | `~/.clone-anything-workbench` | Where jobs, exports and built targets are stored |
+## Model settings
 
-With no API key the workbench still works end to end using its local reasoning
-engine. With a key, the same thought steps are produced by the configured model.
+The website cannot embed a model by itself. By default it uses a deterministic
+summarizer that reads the real REA Evidence. To use a stronger model, click
+**Model** in the top bar and enter any OpenAI-compatible base URL, API key and
+model name (for example `hy4`). Nothing is sent anywhere unless you configure
+an endpoint.
 
-## Using the UI
-
-1. Left panel: press **Search** to list installed apps plus the built-in demo,
-   or type an absolute path / URL.
-2. Select a target and edit the investigation question.
-3. Press **Start analysis**.
-4. Middle panel: follow the streamed thoughts and tool events.
-5. Right panel: preview generated files, then press **Download ZIP**.
-
-The built-in **Notes Example (built-in demo)** is the fastest way to see the
-full pipeline, including the mock-gate cleanup step.
+Environment variables: `PORT`, `AI_BASE_URL`, `AI_API_KEY`, `AI_MODEL`,
+`BROWSER_CDP_URL`, `CLONE_ANYTHING_WORKSPACE`.
 
 ## REST API
 
-| Endpoint | Method | Purpose |
-| --- | --- | --- |
-| `/api/status` | GET | Runtime and integration status |
-| `/api/search` | POST | Discover targets from a query |
-| `/api/analyze` | POST | Start a job; returns `{ id }` |
-| `/api/job/:id` | GET | Job status, events and generated files |
-| `/api/download/:id` | GET | Download the generated ZIP |
+`GET /api/status`, `GET /api/tools`, `GET/POST /api/model`, `POST /api/search`,
+`POST /api/analyze`, `GET /api/job/:id`, `GET /api/download/:id`.
 
-## How it works
+## License / attribution
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the pipeline and module map.
-
-## License
-
-MIT - see [LICENSE](LICENSE). REA attribution is in
-[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+MIT. REA is MIT-licensed by morluto — see `THIRD_PARTY_NOTICES.md`. No REA
+source was copied into this repo; it is used as the installed npm package.

@@ -1,8 +1,8 @@
 {
   "name": "clone-anything-workbench",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
-  "description": "CLI-launched browser workbench for authorized app analysis and original reconstruction. REA-inspired.",
+  "description": "CLI-launched browser workbench that exposes the official REA analysis tools through a web UI.",
   "main": "src/server.js",
   "bin": {
     "clone-anything": "bin/cli.js"
@@ -23,5 +23,8 @@
     "cli",
     "browser"
   ],
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "rea-agents": "^6.10.1"
+  }
 }

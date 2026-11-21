@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Clone Anything - App Analysis Workbench</title>
+  <title>Clone Anything - REA Web Workbench</title>
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
@@ -12,34 +12,42 @@
       <span class="logo">&#9672;</span>
       <div>
         <h1>Clone Anything</h1>
-        <p>App Analysis &amp; Reconstruction Workbench</p>
+        <p>REA tools in a browser - <span id="rea-badge">REA 6.10.1</span></p>
       </div>
     </div>
     <div class="top-actions">
       <span id="status-pill" class="pill">Starting</span>
+      <button id="model-btn" class="ghost" type="button">Model</button>
       <button id="doctor-btn" class="ghost" type="button">Doctor</button>
     </div>
   </header>
 
   <div class="disclaimer">
-    Authorized use only &middot; analyzes software you own or are permitted to examine &middot;
-    generates original code, never copied proprietary code &middot; no subscription or DRM bypass
+    Official REA npm package (MIT) runs locally &middot; real evidence from real tools &middot;
+    authorized targets only &middot; no app copying, no subscription or DRM bypass
   </div>
 
   <main class="layout">
     <section class="panel left">
-      <div class="panel-title"><span class="step-no">1</span><h2>Find a target</h2></div>
+      <div class="panel-title"><span class="step-no">1</span><h2>Target &amp; REA tools</h2></div>
       <div class="search-row">
         <input id="search-input" type="text" placeholder="Search apps, or paste a path / URL" autocomplete="off">
         <button id="search-btn" type="button">Search</button>
       </div>
-      <div id="results" class="results"><div class="empty">Searching this computer...</div></div>
-      <div class="question-box">
-        <label for="question">What should the agent investigate?</label>
-        <textarea id="question" rows="4">Explain how the export feature works and reconstruct a minimal original version with its own MIT license.</textarea>
+      <div id="results" class="results"><div class="empty">Searching...</div></div>
+
+      <div class="section-head">
+        <span>Installed REA tools</span>
+        <span id="tool-count" class="badge">loading</span>
       </div>
-      <button id="analyze-btn" class="primary" type="button">Start analysis</button>
-      <p id="target-hint" class="hint">Select a target above, or type a path/URL and press Search. The built-in demo is safe and works offline.</p>
+      <div id="tool-list" class="tool-list"><div class="empty">Loading REA tool catalog...</div></div>
+
+      <div class="question-box">
+        <label for="question">Question for the agent</label>
+        <textarea id="question" rows="3">Explain what the exported feature does, using only the recorded evidence. Show file and line references when available.</textarea>
+      </div>
+      <button id="analyze-btn" class="primary" type="button">Run REA analysis</button>
+      <p id="target-hint" class="hint">Pick a target, then run. The built-in Notes example is a real local JavaScript app.</p>
     </section>
 
     <section class="panel middle">
@@ -47,22 +55,52 @@
       <div class="progress"><div id="progress-bar"></div></div>
       <div id="progress-label" class="progress-label">Waiting for a job</div>
       <div id="timeline" class="timeline">
-        <div class="empty">The agent's reasoning will stream here, step by step.</div>
+        <div class="empty">REA tool results and agent reasoning will stream here.</div>
       </div>
     </section>
 
     <section class="panel right">
-      <div class="panel-title"><span class="step-no">3</span><h2>Workspace</h2></div>
-      <div class="workspace-head">
-        <span id="file-count">0 files</span>
-        <button id="download-btn" class="primary small" type="button" disabled>Download ZIP</button>
+      <div class="panel-title"><span class="step-no">3</span><h2>Evidence &amp; view</h2></div>
+      <div class="tabs">
+        <button class="tab active" data-tab="report" type="button">Report</button>
+        <button class="tab" data-tab="evidence" type="button">Evidence</button>
+        <button class="tab" data-tab="files" type="button">Target files</button>
+        <button class="tab" data-tab="preview" type="button">Preview</button>
       </div>
-      <div class="workspace-body">
-        <div id="file-tree" class="file-tree"><div class="empty">Generated files will appear here.</div></div>
-        <pre id="file-viewer" class="file-viewer">Select a file to preview it.</pre>
+      <div class="workspace-head">
+        <span id="file-count">0 target files</span>
+        <button id="download-btn" class="primary small" type="button" disabled>Download bundle</button>
+      </div>
+      <div class="tab-panels">
+        <div class="tab-panel active" id="panel-report"><pre class="viewer">Run an analysis to see the report.</pre></div>
+        <div class="tab-panel" id="panel-evidence"><pre class="viewer">REA Evidence JSON will appear here.</pre></div>
+        <div class="tab-panel" id="panel-files">
+          <div id="file-tree" class="file-tree"><div class="empty">Target files will appear here.</div></div>
+          <pre id="file-viewer" class="viewer file-viewer">Select a target file to view its original source.</pre>
+        </div>
+        <div class="tab-panel" id="panel-preview">
+          <div id="preview-box" class="preview-box"><div class="empty">No preview available for this target.</div></div>
+        </div>
       </div>
     </section>
   </main>
+
+  <div id="model-modal" class="modal hidden">
+    <div class="modal-card">
+      <h2>Connect a stronger model</h2>
+      <p class="modal-note">The workbench cannot embed a model by itself. Paste any OpenAI-compatible endpoint and key. Leave blank to use the local evidence summarizer.</p>
+      <label>Base URL</label>
+      <input id="model-base" placeholder="https://api.example.com/v1">
+      <label>API key</label>
+      <input id="model-key" type="password" placeholder="sk-...">
+      <label>Model name</label>
+      <input id="model-name" value="hy4" placeholder="hy4, gpt-4o, claude-...">
+      <div class="modal-actions">
+        <button id="model-cancel" type="button">Cancel</button>
+        <button id="model-save" class="primary" type="button">Save</button>
+      </div>
+    </div>
+  </div>
 
   <script src="/app.js"></script>
 </body>

@@ -4,7 +4,7 @@ const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const { ROOT, getConfig } = require('./config');
+const { ROOT, getConfig, setModel } = require('./config');
 const { searchTargets } = require('./tools/search');
 const { createJob, getJob, publicJob, runJob } = require('./engine');
 const { openBrowser } = require('./utils');
@@ -88,11 +88,31 @@ async function handleApi(req, res, pathname) {
       node: process.version,
       ai: {
         configured: Boolean(cfg.ai.apiKey && cfg.ai.baseUrl),
-        model: cfg.ai.model
+        model: cfg.ai.model,
+        baseUrl: cfg.ai.baseUrl
+      },
+      rea: {
+        version: '6.10.1',
+        mode: 'official npm package (MIT)'
       },
       browser: { cdpUrl: cfg.browser.cdpUrl, websocket: typeof WebSocket === 'function' },
       policy: 'Authorized analysis only. No proprietary cloning, no subscription or DRM bypass.'
     });
+  }
+
+  if (pathname === '/api/model' && method === 'GET') {
+    return sendJson(res, 200, getConfig().ai);
+  }
+
+  if (pathname === '/api/model' && method === 'POST') {
+    const body = await readBody(req);
+    const ai = setModel(body);
+    return sendJson(res, 200, ai);
+  }
+
+  if (pathname === '/api/tools' && method === 'GET') {
+    const rea = require('./rea');
+    return sendJson(res, 200, { tools: await rea.listTools() });
   }
 
   if (pathname === '/api/search' && method === 'POST') {

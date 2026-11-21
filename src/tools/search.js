@@ -6,14 +6,15 @@ const { execFile } = require('node:child_process');
 const { promisify } = require('node:util');
 
 const execFileAsync = promisify(execFile);
+const { ROOT } = require('../config');
 
 const DEMO_TARGET = {
   id: 'demo-notes',
-  name: 'Notes Example (built-in demo)',
+  name: 'Notes Example (real local target)',
   type: 'demo',
-  path: 'builtin://notes-example',
+  path: path.join(ROOT, 'examples', 'notes-app'),
   version: '1.0',
-  description: 'Six-file Electron-style sample with an Export notes action. Safe to analyze and reconstruct.'
+  description: 'Real local JavaScript app. REA analyzes the actual source files.'
 };
 
 async function registryApps() {

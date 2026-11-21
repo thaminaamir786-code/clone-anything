@@ -58,10 +58,10 @@ async function analyze(opts) {
   const target = isDemo
     ? {
         id: 'demo-notes',
-        name: 'Notes Example (built-in demo)',
+        name: 'Notes Example (real local target)',
         type: 'demo',
-        path: 'builtin://notes-example',
-        description: 'Built-in safe demo supplied through the CLI'
+        path: require('node:path').join(__dirname, '..', 'examples', 'notes-app'),
+        description: 'Real local JavaScript target supplied through the CLI'
       }
     : {
         id: `cli-${Date.now()}`,
@@ -72,7 +72,7 @@ async function analyze(opts) {
       };
   const job = createJob(target, opts.question || 'Explain how this target works and reconstruct a minimal original version.');
   job.onEvent = (ev) => {
-    if (ev.kind === 'thought' || ev.kind === 'done') {
+    if (ev.kind === 'thought' || ev.kind === 'done' || ev.kind === 'error') {
       console.log(`  [${ev.title}] ${ev.text}`);
     }
   };

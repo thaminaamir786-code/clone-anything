@@ -2,26 +2,26 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const vm = require('node:vm');
 
-const { DIRS, getConfig } = require('./config');
-const { delay } = require('./utils');
-const fsanalyze = require('./tools/fsanalyze');
-const browser = require('./tools/browser');
+const { DIRS, ROOT, getConfig } = require('./config');
+const { delay, slug } = require('./utils');
+const rea = require('./rea');
 const brain = require('./brain');
-const generator = require('./generator');
 const zip = require('./zip');
+const browser = require('./tools/browser');
 
 const STEP_DEFS = [
-  { key: 'prepare', label: 'Getting your app ready' },
-  { key: 'inspect', label: 'Inspecting target' },
-  { key: 'read', label: 'Reading code' },
-  { key: 'understand', label: 'Understanding behavior' },
-  { key: 'reconstruct', label: 'Writing files' },
-  { key: 'normalize', label: 'Removing mock subscription gate (demo only)' },
-  { key: 'verify', label: 'Verifying output' },
-  { key: 'export', label: 'Exporting downloadable project' }
+  { key: 'prepare', label: 'Getting your target ready' },
+  { key: 'tools', label: 'Loading REA tools' },
+  { key: 'analyze', label: 'Running REA analysis' },
+  { key: 'files', label: 'Reading target files' },
+  { key: 'understand', label: 'Explaining the evidence' },
+  { key: 'report', label: 'Building the report' },
+  { key: 'export', label: 'Packing the evidence bundle' }
 ];
+
+const TEXT_EXT = new Set(['.js', '.mjs', '.cjs', '.ts', '.jsx', '.tsx', '.json', '.html', '.css', '.md', '.py', '.java', '.cs', '.go', '.rs']);
+const SKIP = new Set(['node_modules', '.git', 'dist', 'build', '.workbench']);
 
 const jobs = new Map();
 
@@ -34,8 +34,13 @@ function createJob(target, question) {
     status: 'queued',
     steps: STEP_DEFS.map((step) => Object.assign({}, step, { status: 'pending', detail: '' })),
     events: [],
-    files: {},
-    report: null,
+    tools: [],
+    evidence: null,
+    evidenceSize: 0,
+    rawOutput: '',
+    targetFiles: [],
+    observation: null,
+    report: '',
     downloadPath: '',
     downloadUrl: '',
     createdAt: new Date().toISOString(),
@@ -53,6 +58,7 @@ function getJob(id) {
 }
 
 function publicJob(job) {
+  const evidenceJson = job.evidence ? JSON.stringify(job.evidence) : '';
   return {
     id: job.id,
     status: job.status,
@@ -60,7 +66,12 @@ function publicJob(job) {
     question: job.question,
     steps: job.steps,
     events: job.events,
-    files: job.files,
+    tools: job.tools,
+    evidenceSize: job.evidenceSize,
+    evidencePreview: evidenceJson.slice(0, 200000),
+    rawOutput: job.rawOutput.slice(0, 120000),
+    targetFiles: job.targetFiles,
+    observation: job.observation,
     report: job.report,
     downloadUrl: job.downloadUrl,
     createdAt: job.createdAt,
@@ -71,15 +82,10 @@ function publicJob(job) {
 }
 
 async function emit(job, kind, title, text, extra) {
-  const event = Object.assign({
-    kind,
-    title,
-    text,
-    at: new Date().toISOString()
-  }, extra || {});
+  const event = Object.assign({ kind, title, text, at: new Date().toISOString() }, extra || {});
   job.events.push(event);
   if (typeof job.onEvent === 'function') job.onEvent(event);
-  await delay(140);
+  await delay(120);
 }
 
 function setStep(job, key, status, detail) {
@@ -89,101 +95,123 @@ function setStep(job, key, status, detail) {
   if (detail) step.detail = String(detail).slice(0, 300);
 }
 
-async function thinkFor(job, facts, stepKey, config) {
+async function thinkFor(job, stepKey, config) {
   const text = await brain.think({
-    facts,
     step: stepKey,
+    target: job.target,
     question: job.question,
+    evidence: job.evidence || job.observation,
     config
   });
   const label = (job.steps.find((item) => item.key === stepKey) || {}).label || stepKey;
   await emit(job, 'thought', label, text);
 }
 
-function writeTree(root, files) {
-  for (const [relative, content] of Object.entries(files)) {
-    const full = path.join(root, relative);
-    fs.mkdirSync(path.dirname(full), { recursive: true });
-    fs.writeFileSync(full, content, 'utf8');
+function collectTargetFiles(root, limit) {
+  const collected = [];
+  const stack = [{ dir: root, depth: 0 }];
+  while (stack.length && collected.length < limit) {
+    const { dir, depth } = stack.shift();
+    let entries;
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch (err) { continue; }
+    for (const entry of entries) {
+      if (collected.length >= limit) break;
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (depth < 4 && !SKIP.has(entry.name)) stack.push({ dir: full, depth: depth + 1 });
+        continue;
+      }
+      if (!entry.isFile() || !TEXT_EXT.has(path.extname(entry.name).toLowerCase())) continue;
+      let content;
+      try {
+        if (fs.statSync(full).size > 80 * 1024) continue;
+        content = fs.readFileSync(full, 'utf8').slice(0, 60000);
+      } catch (err) { continue; }
+      collected.push({ path: path.relative(root, full).replace(/\\/g, '/'), content });
+    }
   }
+  return collected;
 }
 
-async function resolveTarget(job) {
+function resolveTargetPath(job) {
   const target = job.target || {};
-  const targetPath = target.path || '';
+  const value = target.path || '';
+  if (target.type === 'demo') return path.join(ROOT, 'examples', 'notes-app');
+  if (/^https?:\/\//i.test(value)) return '';
+  if (value && fs.existsSync(value)) return value;
+  return '';
+}
 
-  if (target.type === 'demo') {
-    const dir = path.join(DIRS.targets, job.id);
-    fs.mkdirSync(dir, { recursive: true });
-    const sources = generator.demoSourceFiles();
-    writeTree(dir, sources);
-    return {
-      kind: 'demo',
-      path: dir,
-      facts: {
-        name: target.name || 'Notes Example',
-        type: 'electron-demo',
-        path: dir,
-        fileCount: Object.keys(sources).length,
-        files: Object.keys(sources),
-        modules: ['./notes', './csv'],
-        functions: ['exportNotes', 'listNotes', 'toCsv'],
-        routes: [],
-        ipc: ['notes:export'],
-        hints: ['export', 'csv', 'mock subscription (demo)'],
-        digest: 'demo-notes',
-        authorizedScope: 'Built-in demo generated locally by this workbench'
-      }
-    };
-  }
+async function runReaAnalysis(job) {
+  const targetPath = resolveTargetPath(job);
+  const isUrl = /^https?:\/\//i.test(job.target.path || '');
 
-  if (/^https?:\/\//i.test(targetPath)) {
-    const observation = await browser.observe(targetPath);
-    return {
-      kind: 'url',
-      path: targetPath,
-      facts: {
-        name: target.name || targetPath,
-        type: 'website',
-        path: targetPath,
-        fileCount: 0,
-        files: [],
-        modules: observation.scripts || [],
-        functions: [],
-        routes: observation.forms || [],
-        ipc: [],
-        hints: [observation.title].filter(Boolean),
-        digest: '',
-        browser: observation,
-        authorizedScope: 'Public website observation; verify your right to analyze it'
-      }
-    };
-  }
-
-  if (targetPath && fs.existsSync(targetPath)) {
-    const facts = fsanalyze.analyzePath(targetPath);
-    facts.authorizedScope = 'Local target supplied by the operator';
-    return { kind: 'path', path: targetPath, facts };
-  }
-
-  return {
-    kind: 'unknown',
-    path: targetPath,
-    facts: {
-      name: target.name || 'unknown',
-      type: 'unknown',
-      path: targetPath,
-      fileCount: 0,
-      files: [],
-      modules: [],
-      functions: [],
-      routes: [],
-      ipc: [],
-      hints: [],
-      digest: '',
-      authorizedScope: 'Target could not be resolved'
+  if (isUrl) {
+    try {
+      job.observation = await browser.observe(job.target.path);
+    } catch (err) {
+      job.observation = { error: err.message };
     }
-  };
+    const result = await rea.analyzeWebBundle(job.target.path);
+    if (result.ok && result.data) {
+      job.evidence = result.data;
+      job.rawOutput = result.raw;
+      return 'REA analyze-web-bundle';
+    }
+    await emit(job, 'tool', 'Browser fallback', 'REA web-bundle capture was unavailable; browser observation is used instead.');
+    return 'Browser observation';
+  }
+
+  if (targetPath) {
+    const jsResult = await rea.analyzeJavaScript(targetPath);
+    if (jsResult.ok && jsResult.data) {
+      job.evidence = jsResult.data;
+      job.rawOutput = jsResult.raw;
+      return 'REA analyze-javascript-application';
+    }
+    const generic = await rea.analyze(targetPath);
+    if (generic.ok && generic.data) {
+      job.evidence = generic.data;
+      job.rawOutput = generic.raw;
+      return 'REA analyze';
+    }
+    throw new Error('REA analysis failed: ' + (generic.error || jsResult.error || 'unknown error'));
+  }
+
+  throw new Error('Target path does not exist and is not a URL');
+}
+
+function buildReport(job) {
+  const evidence = job.evidence || {};
+  const limitations = Array.isArray(evidence.limitations) ? evidence.limitations : [];
+  const keys = Object.keys(evidence);
+  return [
+    '# REA analysis report',
+    '',
+    'Target: ' + (job.target.name || 'unknown'),
+    'Path: ' + (job.target.path || 'n/a'),
+    'Generated: ' + new Date().toISOString(),
+    'Tool: ' + (job.steps.find((s) => s.key === 'analyze') || {}).detail,
+    '',
+    '## Evidence keys',
+    '',
+    ...keys.map((key) => '- ' + key),
+    '',
+    '## Summary',
+    '',
+    brain.summarizeEvidence(evidence),
+    '',
+    '## Limitations (from REA)',
+    '',
+    ...(limitations.length ? limitations.map((item) => '- ' + item) : ['- REA reported no explicit limitation list for this operation.']),
+    '',
+    '## User question',
+    '',
+    job.question || '(none)',
+    '',
+    'This report presents recorded evidence. It does not produce a copied application or bypass any license or subscription.',
+    ''
+  ].join('\n');
 }
 
 async function runJob(job) {
@@ -192,82 +220,67 @@ async function runJob(job) {
   job.status = 'running';
   job.startedAt = new Date().toISOString();
 
-  let facts = { name: job.target.name };
-  let files = {};
-
   try {
-    await thinkFor(job, facts, 'prepare', config);
+    await thinkFor(job, 'prepare', config);
     setStep(job, 'prepare', 'done');
-    await emit(job, 'tool', 'Authorization check', 'Analysis stays local. No subscription, paywall, license check or DRM is bypassed.');
 
-    const resolved = await resolveTarget(job);
-    facts = resolved.facts;
-    await thinkFor(job, facts, 'inspect', config);
-    await emit(job, 'tool', 'Target inspector', `Resolved ${resolved.kind} target: ${facts.name} (${facts.type}).`);
-    setStep(job, 'inspect', 'done');
+    const catalog = await rea.listTools();
+    job.tools = catalog;
+    await thinkFor(job, 'tools', config);
+    await emit(job, 'tool', 'REA tool catalog', catalog.length + ' REA tools are installed and available.');
+    setStep(job, 'tools', 'done');
 
-    await thinkFor(job, facts, 'read', config);
-    await emit(job, 'tool', 'Static reader', `Captured ${(facts.files || []).length} file references, ${(facts.modules || []).length} modules and ${(facts.functions || []).length} functions.`);
-    setStep(job, 'read', 'done');
+    const toolName = await runReaAnalysis(job);
+    job.evidenceSize = JSON.stringify(job.evidence || {}).length;
+    setStep(job, 'analyze', 'done', toolName);
+    await thinkFor(job, 'analyze', config);
+    await emit(job, 'tool', toolName, 'REA returned ' + job.evidenceSize + ' bytes of evidence.');
 
-    await thinkFor(job, facts, 'understand', config);
-    if (facts.browser) {
-      await emit(job, 'tool', 'Browser tool', `Observation via ${facts.browser.tool}: title "${facts.browser.title || 'untitled'}", ${(facts.browser.scripts || []).length} scripts found.`);
+    const targetPath = resolveTargetPath(job);
+    if (targetPath) {
+      job.targetFiles = collectTargetFiles(targetPath, 60);
     }
+    await thinkFor(job, 'files', config);
+    await emit(job, 'tool', 'Target files', 'Read-only snapshot of ' + job.targetFiles.length + ' original target files.');
+    setStep(job, 'files', 'done');
+
+    await thinkFor(job, 'understand', config);
     setStep(job, 'understand', 'done');
 
-    files = generator.generateReconstruction(facts, { demo: resolved.kind === 'demo', question: job.question });
-    job.files = files;
-    await thinkFor(job, facts, 'reconstruct', config);
-    await emit(job, 'tool', 'File writer', `Created ${Object.keys(files).length} original project files.`);
-    setStep(job, 'reconstruct', 'done');
+    job.report = buildReport(job);
+    await thinkFor(job, 'report', config);
+    setStep(job, 'report', 'done');
 
-    if (resolved.kind === 'demo') {
-      const stripped = generator.stripMockPaywall(files);
-      files = stripped.files;
-      job.files = files;
-      await thinkFor(job, facts, 'normalize', config);
-      await emit(job, 'tool', 'Mock-gate cleanup', `Removed ${stripped.removed} lines of mock subscription scaffolding from the generated demo copy only.`);
-      setStep(job, 'normalize', 'done');
-    } else {
-      setStep(job, 'normalize', 'skipped', 'No mock scaffolding in generated output');
+    const files = {
+      'report.md': job.report,
+      'rea-evidence.json': JSON.stringify(job.evidence || {}, null, 2),
+      'rea-output.txt': job.rawOutput.slice(0, 1024 * 1024),
+      'README-evidence-bundle.md': [
+        '# Evidence bundle',
+        '',
+        'Generated by Clone Anything using the official REA package (MIT).',
+        'This bundle contains recorded analysis evidence, not a copied application.',
+        ''
+      ].join('\n')
+    };
+    for (const file of job.targetFiles) {
+      files['target-files/' + file.path] = file.content;
     }
-
-    const buildDir = path.join(DIRS.build, job.id);
-    fs.mkdirSync(buildDir, { recursive: true });
-    writeTree(buildDir, files);
-
-    const syntaxErrors = [];
-    for (const [relative, content] of Object.entries(files)) {
-      if (!/\.js$/.test(relative)) continue;
-      try {
-        new vm.Script(content, { filename: relative });
-      } catch (err) {
-        syntaxErrors.push(`${relative}: ${err.message}`);
-      }
-    }
-    await thinkFor(job, facts, 'verify', config);
-    if (syntaxErrors.length) {
-      await emit(job, 'tool', 'Verifier', syntaxErrors.join('\n'));
-      throw new Error('Generated files failed syntax verification');
-    }
-    await emit(job, 'tool', 'Verifier', 'All generated JavaScript files passed syntax verification.');
-    setStep(job, 'verify', 'done');
-
     const archive = zip.createZip(files);
     const exportPath = path.join(DIRS.exports, `${job.id}.zip`);
     fs.writeFileSync(exportPath, archive);
     job.downloadPath = exportPath;
-    job.downloadUrl = `/api/download/${job.id}`;
-    job.report = facts;
-    await thinkFor(job, facts, 'export', config);
-    await emit(job, 'done', 'Reconstruction ready', `Downloadable project created with ${Object.keys(files).length} files.`, {
+    job.downloadUrl = '/api/download/' + job.id;
+    await thinkFor(job, 'export', config);
+    await emit(job, 'done', 'REA evidence ready', 'Bundle contains the report, full evidence, tool output and target file snapshots.', {
       downloadUrl: job.downloadUrl
     });
     setStep(job, 'export', 'done');
 
+    job.evidenceSize = JSON.stringify(job.evidence || {}).length;
     job.status = 'done';
   } catch (err) {
+    if (process.env.DEBUG_REA) console.error(err && err.stack ? err.stack : err);
     job.status = 'error';
     job.error = err && err.message ? err.message : String(err);
     await emit(job, 'error', 'Analysis stopped', job.error);

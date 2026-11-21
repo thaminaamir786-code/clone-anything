@@ -3,56 +3,43 @@
 const { getConfig } = require('./config');
 
 const SYSTEM_PROMPT = [
-  'You are the reasoning core of Clone Anything, an app analysis and reconstruction workbench.',
-  'You work like REA: inspect evidence first, then explain, then generate original code.',
-  'You only analyze software the user owns or is authorized to examine.',
-  'You never help clone proprietary apps, copy protected code, bypass subscriptions, paywalls, licensing or DRM.',
-  'Generated projects must be original implementations, not copies of the target.',
-  'Write concise, confident reasoning with references to the evidence you were given.'
+  'You are the reasoning layer of Clone Anything, a web front-end for REA-style analysis.',
+  'REA (Reverse Engineer Anything) supplies local Evidence about a real target.',
+  'Your job is to explain that Evidence, point to concrete facts, and state limitations.',
+  'Never invent a different app. Never claim code was copied or that a paywall/license was bypassed.',
+  'If evidence is missing or inconclusive, say so plainly.'
 ].join(' ');
 
-function buildUserPrompt(ctx) {
-  const facts = ctx.facts || {};
+function summarizeEvidence(evidence) {
+  if (!evidence || typeof evidence !== 'object') return 'REA returned no structured Evidence.';
+  const keys = Object.keys(evidence).slice(0, 10);
+  const confidence = evidence.confidence || evidence.authority || 'not reported';
+  const limitations = Array.isArray(evidence.limitations) ? evidence.limitations.length : 0;
+  const graph = evidence.application_graph || evidence.graph || {};
+  const sources = Array.isArray(graph.sources) ? graph.sources.length : 0;
+  const unknowns = Array.isArray(graph.unknowns) ? graph.unknowns.length : 0;
   return [
-    `Step: ${ctx.step || 'analysis'}`,
-    `Question from user: ${ctx.question || ''}`,
-    `Target: ${facts.name || 'unknown'}`,
-    `Detected type: ${facts.type || 'unknown'}`,
-    `Files inspected: ${(facts.files || []).length}`,
-    `Modules: ${(facts.modules || []).slice(0, 8).join(', ')}`,
-    `Functions: ${(facts.functions || []).slice(0, 8).join(', ')}`,
-    `Routes: ${(facts.routes || []).slice(0, 6).join(', ')}`,
-    `IPC handlers: ${(facts.ipc || []).slice(0, 6).join(', ')}`,
-    `Browser observation: ${facts.browser ? JSON.stringify(facts.browser).slice(0, 900) : 'none'}`,
-    'Give a short reasoning paragraph about what the evidence shows and what to do next.'
-  ].join('\n');
+    'REA recorded Evidence with keys: ' + keys.join(', ') + '.',
+    'Confidence/authority: ' + confidence + '.',
+    sources ? 'The application graph retains ' + sources + ' source records and ' + unknowns + ' unknown records.' : '',
+    limitations ? 'REA declares ' + limitations + ' explicit limitations; treat those as authoritative.' : ''
+  ].filter(Boolean).join(' ');
 }
 
 function fallback(ctx) {
-  const facts = ctx.facts || {};
   const step = ctx.step || 'analysis';
-  const name = facts.name || 'the target';
-  const type = facts.type || 'unknown';
-  const fileCount = (facts.files || []).length;
-  const modules = (facts.modules || []).length;
-  const functions = (facts.functions || []).length;
-  const routes = (facts.routes || []).length;
-  const ipc = (facts.ipc || []).length;
-
+  const evidence = ctx.evidence;
+  const target = (ctx.target && ctx.target.name) || 'the target';
   const byStep = {
-    prepare: `Target "${name}" is registered as an authorized analysis job. I will keep all work local and avoid any protected or proprietary material.`,
-    inspect: `The target looks like a ${type}. I found ${fileCount} readable file references and a digest of ${facts.digest || 'n/a'}; that gives enough structure to start tracing behavior.`,
-    read: `I scanned ${fileCount} files and recovered ${modules} module references, ${functions} function names, ${routes} routes and ${ipc} IPC handlers. These are the anchors for understanding the feature.`,
-    understand: facts.browser
-      ? `Browser observation returned the page title "${facts.browser.title || 'untitled'}", ${(facts.browser.scripts || []).length} scripts and ${(facts.browser.forms || []).length} forms. I will treat those as runtime evidence, not as code to copy.`
-      : `No live browser session was available, so I am relying on the static evidence. The detected structure still supports a minimal original reconstruction.`,
-    reconstruct: `I am writing an original project from the findings. No source code is copied from "${name}"; the output is a fresh implementation with its own MIT license.`,
-    normalize: `The demo source I generated contains a clearly marked mock subscription gate. I am stripping that scaffolding from the generated copy only - no real paywall or license check is touched.`,
-    verify: `I am syntax-checking every generated JavaScript file before packaging so the downloadable project opens cleanly.`,
-    export: `The original reconstruction is complete and packaged for download. The report keeps the evidence and limitations alongside the code.`
+    prepare: 'Registered ' + target + ' as an authorized analysis job. All REA tools run locally on your machine.',
+    tools: 'Loaded the installed REA tool catalog. Every action below is an actual REA tool, not a simulated one.',
+    analyze: 'REA has inspected ' + target + '. ' + summarizeEvidence(evidence),
+    files: 'Collected a read-only snapshot of the target files so you can view the original source alongside the evidence.',
+    understand: summarizeEvidence(evidence) + ' The summary stays faithful to the recorded facts.',
+    report: 'Built a report from the REA Evidence. Any unknowns and limitations are kept visible rather than hidden.',
+    export: 'Packaged the REA Evidence, tool output and report into a downloadable evidence bundle.'
   };
-
-  return byStep[step] || `I reviewed the evidence for "${name}" and will continue with an original, authorized reconstruction.`;
+  return byStep[step] || summarizeEvidence(evidence) || ('Analyzing ' + target + '.');
 }
 
 async function think(ctx) {
@@ -61,33 +48,45 @@ async function think(ctx) {
   if (ai.apiKey && ai.baseUrl) {
     try {
       const base = String(ai.baseUrl).replace(/\/$/, '');
-      const response = await fetch(`${base}/chat/completions`, {
+      const response = await fetch(base + '/chat/completions', {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
-          authorization: `Bearer ${ai.apiKey}`
+          authorization: 'Bearer ' + ai.apiKey
         },
         body: JSON.stringify({
-          model: ai.model || 'gpt-4o-mini',
+          model: ai.model || 'hy4',
           messages: [
             { role: 'system', content: SYSTEM_PROMPT },
-            { role: 'user', content: buildUserPrompt(ctx) }
+            {
+              role: 'user',
+              content: [
+                'Step: ' + (ctx.step || 'analysis'),
+                'Target: ' + ((ctx.target && ctx.target.name) || 'unknown'),
+                'User question: ' + (ctx.question || ''),
+                'REA Evidence (JSON, possibly truncated):',
+                JSON.stringify(ctx.evidence || {}).slice(0, 12000),
+                'Write a short, evidence-grounded explanation.'
+              ].join('\n')
+            }
           ],
-          temperature: 0.3,
-          max_tokens: 600
+          temperature: 0.2,
+          max_tokens: 700
         }),
-        signal: AbortSignal.timeout(20000)
+        signal: AbortSignal.timeout(25000)
       });
       if (response.ok) {
         const data = await response.json();
-        const text = data?.choices?.[0]?.message?.content?.trim();
+        const text = data && data.choices && data.choices[0] && data.choices[0].message
+          ? String(data.choices[0].message.content || '').trim()
+          : '';
         if (text) return text;
       }
     } catch (err) {
-      // Fall back to the deterministic local brain.
+      // Fall back to deterministic evidence summary.
     }
   }
   return fallback(ctx);
 }
 
-module.exports = { think, SYSTEM_PROMPT, fallback };
+module.exports = { think, fallback, summarizeEvidence, SYSTEM_PROMPT };
