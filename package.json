@@ -1,0 +1,27 @@
+{
+  "name": "clone-anything-workbench",
+  "version": "1.0.0",
+  "private": true,
+  "description": "CLI-launched browser workbench for authorized app analysis and original reconstruction. REA-inspired.",
+  "main": "src/server.js",
+  "bin": {
+    "clone-anything": "bin/cli.js"
+  },
+  "scripts": {
+    "start": "node bin/cli.js start",
+    "doctor": "node bin/cli.js doctor",
+    "analyze": "node bin/cli.js analyze",
+    "test": "node --test tests/*.test.js"
+  },
+  "engines": {
+    "node": ">=22.23.4"
+  },
+  "keywords": [
+    "reverse-engineering",
+    "mcp",
+    "analysis",
+    "cli",
+    "browser"
+  ],
+  "license": "MIT"
+}

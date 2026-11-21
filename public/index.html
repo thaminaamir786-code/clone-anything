@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Clone Anything - App Analysis Workbench</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">&#9672;</span>
+      <div>
+        <h1>Clone Anything</h1>
+        <p>App Analysis &amp; Reconstruction Workbench</p>
+      </div>
+    </div>
+    <div class="top-actions">
+      <span id="status-pill" class="pill">Starting</span>
+      <button id="doctor-btn" class="ghost" type="button">Doctor</button>
+    </div>
+  </header>
+
+  <div class="disclaimer">
+    Authorized use only &middot; analyzes software you own or are permitted to examine &middot;
+    generates original code, never copied proprietary code &middot; no subscription or DRM bypass
+  </div>
+
+  <main class="layout">
+    <section class="panel left">
+      <div class="panel-title"><span class="step-no">1</span><h2>Find a target</h2></div>
+      <div class="search-row">
+        <input id="search-input" type="text" placeholder="Search apps, or paste a path / URL" autocomplete="off">
+        <button id="search-btn" type="button">Search</button>
+      </div>
+      <div id="results" class="results"><div class="empty">Searching this computer...</div></div>
+      <div class="question-box">
+        <label for="question">What should the agent investigate?</label>
+        <textarea id="question" rows="4">Explain how the export feature works and reconstruct a minimal original version with its own MIT license.</textarea>
+      </div>
+      <button id="analyze-btn" class="primary" type="button">Start analysis</button>
+      <p id="target-hint" class="hint">Select a target above, or type a path/URL and press Search. The built-in demo is safe and works offline.</p>
+    </section>
+
+    <section class="panel middle">
+      <div class="panel-title"><span class="step-no">2</span><h2>Agent thoughts</h2></div>
+      <div class="progress"><div id="progress-bar"></div></div>
+      <div id="progress-label" class="progress-label">Waiting for a job</div>
+      <div id="timeline" class="timeline">
+        <div class="empty">The agent's reasoning will stream here, step by step.</div>
+      </div>
+    </section>
+
+    <section class="panel right">
+      <div class="panel-title"><span class="step-no">3</span><h2>Workspace</h2></div>
+      <div class="workspace-head">
+        <span id="file-count">0 files</span>
+        <button id="download-btn" class="primary small" type="button" disabled>Download ZIP</button>
+      </div>
+      <div class="workspace-body">
+        <div id="file-tree" class="file-tree"><div class="empty">Generated files will appear here.</div></div>
+        <pre id="file-viewer" class="file-viewer">Select a file to preview it.</pre>
+      </div>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>
