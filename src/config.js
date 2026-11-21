@@ -1,10 +1,15 @@
 'use strict';
 
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 
 const ROOT = path.resolve(__dirname, '..');
-const WORKSPACE = path.join(ROOT, '.workbench');
+// Runtime data goes to the user profile so the app also works when installed
+// under a protected folder such as "Program Files".
+const WORKSPACE = process.env.CLONE_ANYTHING_WORKSPACE
+  ? path.resolve(process.env.CLONE_ANYTHING_WORKSPACE)
+  : path.join(os.homedir(), '.clone-anything-workbench');
 const DIRS = {
   root: WORKSPACE,
   jobs: path.join(WORKSPACE, 'jobs'),

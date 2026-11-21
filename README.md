@@ -62,6 +62,7 @@ Environment variables:
 | `AI_API_KEY` | empty | API key; when empty, the deterministic local brain is used |
 | `AI_MODEL` | `gpt-4o-mini` | Model name for the configured endpoint |
 | `BROWSER_CDP_URL` | `http://127.0.0.1:9222` | Chrome/Edge DevTools endpoint |
+| `CLONE_ANYTHING_WORKSPACE` | `~/.clone-anything-workbench` | Where jobs, exports and built targets are stored |
 
 With no API key the workbench still works end to end using its local reasoning
 engine. With a key, the same thought steps are produced by the configured model.

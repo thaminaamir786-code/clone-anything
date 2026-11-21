@@ -3,7 +3,7 @@
 ```
 bin/cli.js            CLI entry point: start, doctor, analyze, help
 src/server.js         Local HTTP server + REST API + static UI
-src/config.js         Paths, port, AI and browser configuration
+src/config.js         Paths, port, AI and browser configuration (workspace in user profile)
 src/utils.js          Browser opening, delays, slugs, escaping
 src/engine.js         Job lifecycle, thought streaming, orchestration
 src/brain.js          AI reasoning core (configurable provider + local fallback)
